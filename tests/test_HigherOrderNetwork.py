@@ -3,6 +3,7 @@ import pytest
 import numpy as np
 import itertools
 from pathpy.algorithms import shortest_paths
+import pudb
 
 
 slow = pytest.mark.slow
@@ -165,6 +166,23 @@ def test_transition_probability(random_paths, k, sub):
     assert T.sum() == pytest.approx(transitions)
     assert np.all(T <= 1), "not all probabilities are smaller then 1"
     assert np.all(T >= 0), "not all probabilities are positive"
+
+
+@pytest.mark.parametrize('prior', (0, 1))
+def test_transition_probability_prior(random_paths, prior):
+    paths = pp.Paths()
+    paths.add_path('a,b', frequency=1)
+    paths.add_path('b,b', frequency=3)
+    paths.add_path('b,c', frequency=3)
+
+    hon = pp.HigherOrderNetwork(paths, k=1)
+    T = hon.transition_matrix(include_subpaths=True, prior=prior).toarray()
+    P = hon.transition_priors(include_subpaths=True, prior=prior)
+
+    empty_counts = np.sum(T == 0, axis=0)
+    result = T.sum(axis=0) + np.multiply(empty_counts, P)
+
+    assert((result == 1.0).all)
 
 
 @pytest.mark.parametrize('num_nodes', (5, 8, 10))

@@ -47,7 +47,7 @@ class MultiOrderModel:
         A dictionary where layers[k] contains the higher-order model with order k
     """
 
-    def __init__(self, paths, max_order=1):
+    def __init__(self, paths, max_order=1, prior=0):
         """Generates a hierarchy of higher-order models for the given path statistics
         up to a given maximum order
 
@@ -62,6 +62,8 @@ class MultiOrderModel:
             'Error: Construction of multi-order model with maximum order M ' \
             'requires sub path statistics up to length M'
 
+        print("wupsi")
+
         # the paths object from which this multi-order model was created
         self.paths = paths
 
@@ -71,6 +73,10 @@ class MultiOrderModel:
         
         # a dictionary of transition matrices for all layers of the model
         self.transition_matrices = {}
+
+        self.transition_matrices_prior = {}
+
+        self.prior = prior
 
         self.add_layers(max_order)
 
@@ -99,7 +105,7 @@ class MultiOrderModel:
             # compute transition matrices for all layers. In order to use the
             # maximally available statistics, we always use sub paths in the
             # calculation
-            trans_mat = p_layer.transition_matrix(include_subpaths=True)
+            trans_mat = p_layer.transition_matrix(include_subpaths=True, prior=self.prior)
 
             Log.add('... finished')
             return [order_k, p_layer, trans_mat]
@@ -122,7 +128,20 @@ class MultiOrderModel:
             # compute transition matrices for all layers. In order to use the
             # maximally available statistics, we always use sub paths in the
             # calculation
-            self.transition_matrices[k] = self.layers[k].transition_matrix(include_subpaths=True)
+            self.transition_matrices[k] = self.layers[k].transition_matrix(include_subpaths=True, prior=self.prior)
+
+        Log.add('finished.')
+
+    def __add_layers_priors(self, orders):
+        paths = self.paths
+
+        for k in sorted(orders):
+            Log.add('Generating %d-th order layer ...' % k)
+
+            # compute transition matrices for all layers. In order to use the
+            # maximally available statistics, we always use sub paths in the
+            # calculation
+            self.transition_matrices_prior[k] = self.layers[k].transition_priors(include_subpaths=True, prior=self.prior)
 
         Log.add('finished.')
 
@@ -149,8 +168,10 @@ class MultiOrderModel:
         orders_to_add = list(range(current_max_order+1, max_order+1))
         if len(orders_to_add) > 1 and ENABLE_MULTICORE_SUPPORT:
             self.__add_layers_parallel(orders_to_add)
+            self.__add_layers_priors(orders_to_add)
         else:
             self.__add_layers_sequential(orders_to_add)
+            self.__add_layers_priors(orders_to_add)
 
     def summary(self):
         """
@@ -539,18 +560,26 @@ observed and therefore the likelihood cannot be computed.
 
             # First multiply the transitions in the l-th order model ...
             transition_matrix = self.transition_matrices[layer]
+            transition_prior = self.transition_matrices_prior[layer]
             try:
                 for s in range(len(nodes)-1):
                     idx_s1 = index_maps[layer][nodes[s + 1]]
                     idx_s0 = index_maps[layer][nodes[s]]
                     trans_mat = transition_matrix[idx_s1, idx_s0]
-                    likelihood += np.log(trans_mat) * freq
+
+                    if trans_mat == 0:
+                        likelihood += np.log(transition_prior[idx_s0]) * freq
+                    else:
+                        likelihood += np.log(trans_mat) * freq
                 # ... then multiply additional transition probabilities for the prefix ...
                 for k_ in range(layer):
                     trans_idx0 = index_maps[k_][transitions[k_][0]]
                     trans_idx1 = index_maps[k_][transitions[k_][1]]
-                    trans_mat = self.transition_matrices[k_]
-                    likelihood += np.log(trans_mat[trans_idx1, trans_idx0]) * freq
+                    trans_mat = self.transition_matrices[k_][trans_idx1, trans_idx0]
+                    if trans_mat == 0:
+                        likelihood += np.log(self.transition_matrices_prior[k_][idx_s0]) * freq
+                    else:
+                        likelihood += np.log(trans_mat) * freq
             except KeyError as e:
                 msg = ("The path segment '({})' has not been observed and therefore the "
                        "likelihood cannot be computed.").format(e.args[0])

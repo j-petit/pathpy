@@ -511,7 +511,7 @@ class HigherOrderNetwork(Network):
         return _sparse.coo_matrix((data, (row, col)), shape=shape).tocsr()
 
 
-    def transition_matrix(self, include_subpaths=True):
+    def transition_matrix(self, include_subpaths=True, prior=0):
         """Returns a (transposed) random walk transition matrix corresponding to the
         higher-order network.
 
@@ -528,11 +528,14 @@ class HigherOrderNetwork(Network):
         row = []
         col = []
         data = []
+
+        num_nodes = self.ncount()
+
         # calculate weighted out-degrees (with or without subpaths)
         if include_subpaths:
-            D = {n: self.nodes[n]['outweight'].sum() for n in self.nodes}
+            D = {n: self.nodes[n]['outweight'].sum() + prior * num_nodes for n in self.nodes}
         else:
-            D = {n: self.nodes[n]['outweight'][1] for n in self.nodes}
+            D = {n: self.nodes[n]['outweight'][1] + prior * num_nodes for n in self.nodes}
 
         node_to_coord = self.node_to_name_map()
 
@@ -549,9 +552,9 @@ class HigherOrderNetwork(Network):
                 row.append(node_to_coord[t])
                 col.append(node_to_coord[s])
                 if include_subpaths:
-                    count = self.edges[(s, t)]['weight'].sum()
+                    count = self.edges[(s, t)]['weight'].sum() + prior
                 else:
-                    count = self.edges[(s, t)]['weight'][1]
+                    count = self.edges[(s, t)]['weight'][1] + prior
                 assert D[s] > 0, \
                     'Encountered zero out-degree for node "{s}" ' \
                     'while weight of link ({s}, {t}) is non-zero.'.format(s=s, t=t)
@@ -566,6 +569,50 @@ class HigherOrderNetwork(Network):
 
         shape = self.ncount(), self.ncount()
         return _sparse.coo_matrix((data, (row, col)), shape=shape).tocsr()
+
+    def transition_priors(self, include_subpaths=True, prior=0):
+        """Returns a (transposed) random walk transition matrix corresponding to the
+        higher-order network.
+
+        Parameters
+        ----------
+        include_subpaths: bool
+            whether or not to include subpath statistics in the transition probability
+            calculation (default True)
+
+        Returns
+        -------
+
+        """
+        row = []
+        col = []
+        data = []
+
+        num_nodes = self.ncount()
+
+        # calculate weighted out-degrees (with or without subpaths)
+        if include_subpaths:
+            D = {n: self.nodes[n]['outweight'].sum() + prior * num_nodes for n in self.nodes}
+        else:
+            D = {n: self.nodes[n]['outweight'][1] + prior * num_nodes for n in self.nodes}
+
+        node_to_coord = self.node_to_name_map()
+
+        prior_probs = _np.zeros(num_nodes)
+
+        for n in self.nodes:
+            # either s->t has been observed as a longest path, or we are interested in
+            # subpaths as well
+
+            # the following makes sure that we do not accidentally consider zero-weight
+            # edges (automatically added by default_dic)
+            prob = prior / D[n]
+            if prob < 0 or prob > 1:  # pragma: no cover
+                raise ValueError('Encountered transition probability {p} outside '
+                                 '[0,1] range.'.format(p=prob))
+            prior_probs[node_to_coord[n]] = prob
+
+        return prior_probs
 
 
     def laplacian_matrix(self, include_subpaths=True):
