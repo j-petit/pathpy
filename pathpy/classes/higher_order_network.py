@@ -606,7 +606,13 @@ class HigherOrderNetwork(Network):
 
             # the following makes sure that we do not accidentally consider zero-weight
             # edges (automatically added by default_dic)
-            prob = prior / D[n]
+            if (D[n] != 0):
+                if(self.order == 0):
+                    prob = prior / D["start"]
+                else:
+                    prob = prior / D[n]
+            else:
+                prob = 0
             if prob < 0 or prob > 1:  # pragma: no cover
                 raise ValueError('Encountered transition probability {p} outside '
                                  '[0,1] range.'.format(p=prob))

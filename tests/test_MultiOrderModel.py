@@ -108,12 +108,15 @@ def test_estimate_order_2():
 
 @pytest.mark.parametrize(
         'sample_path, prior, a_likelihood', (
-            ('a', 0, -2.07944154168), # computed as ln(5/40)
-            ('a', 1, -2.03688192726), # computed as ln(6/46)
-            ('a', 2, -2.00533356953),  # computed as ln(7/52)
-            ('a,b', 0, -np.inf), # computed as ln(5/40)+ln(0)
-            ('a,b', 1, -4.33946702026), # computed as ln(6/46)+ln(1/10)
-            ('a,b', 2, -4.02023659007)  # computed as ln(7/52)+ln(2/15)
+            #('a', 0, -2.07944154168), # computed as ln(5/40)
+            #('a', 1, -2.03688192726), # computed as ln(6/46)
+            #('a', 2, -2.00533356953),  # computed as ln(7/52)
+            #('x', 0, -np.inf),  # computed as ln(7/52)+ln(2/15)
+            #('x', 1, -3.85014760171),  # computed as ln(1/47)
+            ('a,x', 1, -np.inf), # computed as ln(5/40)+ln(0)
+            #('a,b', 0, -np.inf), # computed as ln(5/40)+ln(0)
+            #('a,b', 1, -4.33946702026), # computed as ln(6/46)+ln(1/10)
+            #('a,b', 2, -4.02023659007)  # computed as ln(7/52)+ln(2/15)
         )
 )
 def test_estimate_order_3(sample_path, prior, a_likelihood):
@@ -129,7 +132,7 @@ def test_estimate_order_3(sample_path, prior, a_likelihood):
         paths.add_path('a,c,d,e')
         paths.add_path('b,c,e,d')
 
-    m = pp.MultiOrderModel(paths, max_order=3, prior=prior)
+    m = pp.MultiOrderModel(paths, max_order=3, prior=prior, unknown=True)
 
     test_path = pp.Paths()
     test_path.add_path(sample_path)

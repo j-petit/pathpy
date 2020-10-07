@@ -47,7 +47,7 @@ class MultiOrderModel:
         A dictionary where layers[k] contains the higher-order model with order k
     """
 
-    def __init__(self, paths, max_order=1, prior=0):
+    def __init__(self, paths, max_order=1, prior=0, unknown=False):
         """Generates a hierarchy of higher-order models for the given path statistics
         up to a given maximum order
 
@@ -64,13 +64,19 @@ class MultiOrderModel:
 
         print("wupsi")
 
+        if unknown:
+            node = "unknown"
+            for i in range(max_order + 1):
+                unknown_path = [node] * (i + 1)
+                paths.add_path(unknown_path, frequency=0, expand_subpaths=False)
+
         # the paths object from which this multi-order model was created
         self.paths = paths
 
         """A dictionary containing the layers of HigherOrderNetworks, where
         # layers[k] contains the network of order k"""
         self.layers = {}
-        
+
         # a dictionary of transition matrices for all layers of the model
         self.transition_matrices = {}
 
@@ -508,10 +514,12 @@ observed and therefore the likelihood cannot be computed.
 
 
         """
+
         if index_maps is None:
             index_maps = {k: self.layers[k].node_to_name_map() for k in range(0, layer+1)}
 
         likelihood = 0
+
         # special case: to calculate the likelihood of the path based on a
         # zero-order model we use the 'start' -> v transitions in the
         # respective model instance
@@ -519,8 +527,12 @@ observed and therefore the likelihood cannot be computed.
             try:
                 for s in range(len(path)):
                     source = index_maps[0]['start']
-                    target = index_maps[0][path[s]]
-                    likelihood += np.log(self.transition_matrices[0][target, source]) * freq
+                    target = index_maps[0][path[s] if path[s] in index_maps[0].keys() else self.unknown_node_generator(0)]
+                    trans_mat = self.transition_matrices[0][target, source]
+                    if trans_mat == 0:
+                        likelihood += np.log(self.transition_matrices_prior[0][target]) * freq
+                    else:
+                        likelihood += np.log(trans_mat) * freq
             except KeyError as e:
                 msg = ("The path segment '({})' has not been observed and therefore the "
                        "likelihood cannot be computed.").format(e.args[0])
@@ -549,6 +561,10 @@ observed and therefore the likelihood cannot be computed.
                 transitions[k_] = self.layers[k_].path_to_higher_order_nodes(x)
                 prefix = transitions[k_][0]
 
+            for i, n in enumerate(nodes):
+                if n not in index_maps[layer].keys():
+                    nodes[i] = self.unknown_node_generator(layer)
+
             # 4.) Using Bayes theorem, we calculate the likelihood of a path a-b-c-d-e of length
             # four for l=4 as a single transition in a fourth-order model, and four additional
             # transitions in the k_=0, 1, 2 and 3-order models, i.e. we have ... P(a-b-c-d-e) =
@@ -573,6 +589,12 @@ observed and therefore the likelihood cannot be computed.
                         likelihood += np.log(trans_mat) * freq
                 # ... then multiply additional transition probabilities for the prefix ...
                 for k_ in range(layer):
+
+                    if transitions[k_][0] not in index_maps[k_].keys():
+                        transitions[k_][0] = self.unknown_node_generator(k_)
+                    if transitions[k_][1] not in index_maps[k_].keys():
+                        transitions[k_][1] = self.unknown_node_generator(k_)
+
                     trans_idx0 = index_maps[k_][transitions[k_][0]]
                     trans_idx1 = index_maps[k_][transitions[k_][1]]
                     trans_mat = self.transition_matrices[k_][trans_idx1, trans_idx0]
@@ -842,3 +864,11 @@ observed and therefore the likelihood cannot be computed.
         # if the AIC/AICc/BIC of the zero-order model is larger than that of the
         # first-order model, we do not reject the network hypothesis
         return ic0 > ic1, ic0, ic1
+
+    def unknown_node_generator(self, order):
+        node = ["unknown"] * order
+        separator = ","
+
+        if order == 0:
+            return "unknown"
+        return separator.join(node)

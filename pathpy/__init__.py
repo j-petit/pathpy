@@ -25,5 +25,7 @@ from .algorithms import statistics
 
 import pathpy.utils
 
+print("wupsi")
+
 global ENABLE_MULTICORE_SUPPORT
 ENABLE_MULTICORE_SUPPORT = False
