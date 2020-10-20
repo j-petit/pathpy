@@ -599,7 +599,7 @@ observed and therefore the likelihood cannot be computed.
                     trans_idx1 = index_maps[k_][transitions[k_][1]]
                     trans_mat = self.transition_matrices[k_][trans_idx1, trans_idx0]
                     if trans_mat == 0:
-                        likelihood += np.log(self.transition_matrices_prior[k_][idx_s0]) * freq
+                        likelihood += np.log(self.transition_matrices_prior[k_][trans_idx0]) * freq
                     else:
                         likelihood += np.log(trans_mat) * freq
             except KeyError as e:
